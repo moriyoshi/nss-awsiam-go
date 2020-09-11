@@ -181,7 +181,7 @@ func (cli *iamClient) listGroupsForUser(ctx context.Context, userName string) ([
 	defer cli.mu.Unlock()
 	var retval []iam.Group
 	ent, ok := cli.groupsForUserCache[userName]
-	if ok && ent.expiry.IsZero() && ent.expiry.After(cli.nowGetter()) {
+	if ok && !ent.expiry.IsZero() && ent.expiry.After(cli.nowGetter()) {
 		retval = ent.data
 	} else {
 		var marker *string
@@ -233,7 +233,7 @@ func (cli *iamClient) getUser(ctx context.Context, userName string) (*iam.User, 
 	defer cli.mu.Unlock()
 	var retval *iam.User
 	ent, ok := cli.userCache[userName]
-	if ok && ent.expiry.IsZero() && ent.expiry.After(cli.nowGetter()) {
+	if ok && !ent.expiry.IsZero() && ent.expiry.After(cli.nowGetter()) {
 		retval = ent.data
 	} else {
 		client, err := cli.getIamClient()
@@ -264,7 +264,7 @@ func (cli *iamClient) getGroup(ctx context.Context, groupName string) (*iam.Grou
 	var group *iam.Group
 	var members []*iam.User
 	ent, ok := cli.groupCache[groupName]
-	if ok && ent.expiry.IsZero() && ent.expiry.After(cli.nowGetter()) && ent.members != nil {
+	if ok && !ent.expiry.IsZero() && ent.expiry.After(cli.nowGetter()) && ent.members != nil {
 		group = ent.data
 		members = ent.members
 	} else {
