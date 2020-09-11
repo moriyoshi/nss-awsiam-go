@@ -80,7 +80,9 @@ func init() {
 }
 
 func debug(msg ...interface{}) {
-	fmt.Fprintln(os.Stderr, msg...)
+	if debugEnabled {
+		fmt.Fprintln(os.Stderr, msg...)
+	}
 }
 
 func getAwsConfig() (cfg aws.Config, err error) {
@@ -296,12 +298,12 @@ func _nss_awsiam_go_getpwnam_r(
 	goName := C.GoString(name)
 	user, err := iamw.getIamUser(goName)
 	if err != nil {
+		debug("getpwnam_r", err)
 		if err, ok := err.(awserr.RequestFailure); ok {
 			if err.StatusCode() == 404 {
 				return C.NSS_STATUS_NOTFOUND
 			}
 		}
-		debug("getpwnam_r", err)
 		return C.NSS_STATUS_UNAVAIL
 	}
 	err = fillPwentWithIamUser(
@@ -425,12 +427,12 @@ func _nss_awsiam_go_getgrnam_r(
 	goName := C.GoString(name)
 	group, members, err := iamw.getIamGroup(goName)
 	if err != nil {
+		debug("getgrnam_r", err)
 		if err, ok := err.(awserr.RequestFailure); ok {
 			if err.StatusCode() == 404 {
 				return C.NSS_STATUS_NOTFOUND
 			}
 		}
-		debug("getgrnam_r", err)
 		return C.NSS_STATUS_UNAVAIL
 	}
 	err = fillGrentWithIamGroup(
@@ -543,12 +545,12 @@ func _nss_awsiam_go_getspnam_r(name *C.char, spbuf *C.struct_spwd, buf *C.char, 
 	goName := C.GoString(name)
 	user, err := iamw.getIamUser(goName)
 	if err != nil {
+		debug("getspnam_r", err)
 		if err, ok := err.(awserr.RequestFailure); ok {
 			if err.StatusCode() == 404 {
 				return C.NSS_STATUS_NOTFOUND
 			}
 		}
-		debug("getpwnam_r", err)
 		return C.NSS_STATUS_UNAVAIL
 	}
 	err = fillSpentWithIamUser(
