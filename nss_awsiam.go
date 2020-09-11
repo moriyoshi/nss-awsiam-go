@@ -325,6 +325,49 @@ func _nss_awsiam_go_getpwnam_r(
 	return C.NSS_STATUS_SUCCESS
 }
 
+//export _nss_awsiam_go_getpwuid_r
+func _nss_awsiam_go_getpwuid_r(
+	uid C.uid_t,
+	pwd *C.struct_passwd,
+	buf *C.char,
+	buflen C.size_t,
+	result **C.struct_passwd,
+) C.enum_nss_status {
+	iamw := newIamWrap(rootCtx)
+	users, err := iamw.getIamUsers()
+	if err != nil {
+		debug("getpwuid_r", err)
+		if err, ok := err.(awserr.RequestFailure); ok {
+			if err.StatusCode() == 404 {
+				return C.NSS_STATUS_NOTFOUND
+			}
+		}
+		return C.NSS_STATUS_UNAVAIL
+	}
+	for _, user := range users {
+		if uid == C.uid_t(uidBase+toUid(*user.UserId)) {
+			err = fillPwentWithIamUser(
+				pwd,
+				bufalloc{
+					buf:    uintptr(unsafe.Pointer(buf)),
+					buflen: uintptr(buflen),
+				},
+				&user,
+			)
+			if err == insufficientBuffer {
+				return C.NSS_STATUS_TRYAGAIN
+			} else if err != nil {
+				return C.NSS_STATUS_UNAVAIL
+			}
+			if result != nil {
+				*result = pwd
+			}
+			return C.NSS_STATUS_SUCCESS
+		}
+	}
+	return C.NSS_STATUS_NOTFOUND
+}
+
 var getpwentContext struct {
 	iamw  *iamWrap
 	users []iam.User
@@ -453,6 +496,60 @@ func _nss_awsiam_go_getgrnam_r(
 		*result = grp
 	}
 	return C.NSS_STATUS_SUCCESS
+}
+
+//export _nss_awsiam_go_getgrgid_r
+func _nss_awsiam_go_getgrgid_r(
+	gid C.gid_t,
+	grp *C.struct_group,
+	buf *C.char,
+	buflen C.size_t,
+	result **C.struct_group,
+) C.enum_nss_status {
+	iamw := newIamWrap(rootCtx)
+	groups, err := iamw.getIamGroups()
+	if err != nil {
+		debug("getgrgid_r", err)
+		if err, ok := err.(awserr.RequestFailure); ok {
+			if err.StatusCode() == 404 {
+				return C.NSS_STATUS_NOTFOUND
+			}
+		}
+		return C.NSS_STATUS_UNAVAIL
+	}
+	for _, group := range groups {
+		if gid == C.gid_t(uidBase+toUid(*group.GroupId)) {
+			members, err := iamw.getIamUsersInGroup(*group.GroupName)
+			if err != nil {
+				debug("getgrgid_r", err)
+				if err, ok := err.(awserr.RequestFailure); ok {
+					if err.StatusCode() == 404 {
+						return C.NSS_STATUS_NOTFOUND
+					}
+				}
+				return C.NSS_STATUS_UNAVAIL
+			}
+			err = fillGrentWithIamGroup(
+				grp,
+				bufalloc{
+					buf:    uintptr(unsafe.Pointer(buf)),
+					buflen: uintptr(buflen),
+				},
+				&group,
+				members,
+			)
+			if err == insufficientBuffer {
+				return C.NSS_STATUS_TRYAGAIN
+			} else if err != nil {
+				return C.NSS_STATUS_UNAVAIL
+			}
+			if result != nil {
+				*result = grp
+			}
+			return C.NSS_STATUS_SUCCESS
+		}
+	}
+	return C.NSS_STATUS_NOTFOUND
 }
 
 var getgrentContext struct {
