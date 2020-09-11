@@ -317,6 +317,7 @@ func _nss_awsiam_go_getpwnam_r(
 	if err == insufficientBuffer {
 		return C.NSS_STATUS_TRYAGAIN
 	} else if err != nil {
+		debug("getpwnam_r", err)
 		return C.NSS_STATUS_UNAVAIL
 	}
 	if result != nil {
@@ -357,6 +358,7 @@ func _nss_awsiam_go_getpwuid_r(
 			if err == insufficientBuffer {
 				return C.NSS_STATUS_TRYAGAIN
 			} else if err != nil {
+				debug("getpwuid_r", err)
 				return C.NSS_STATUS_UNAVAIL
 			}
 			if result != nil {
@@ -490,6 +492,7 @@ func _nss_awsiam_go_getgrnam_r(
 	if err == insufficientBuffer {
 		return C.NSS_STATUS_TRYAGAIN
 	} else if err != nil {
+		debug("getgrnam_r", err)
 		return C.NSS_STATUS_UNAVAIL
 	}
 	if result != nil {
@@ -541,6 +544,7 @@ func _nss_awsiam_go_getgrgid_r(
 			if err == insufficientBuffer {
 				return C.NSS_STATUS_TRYAGAIN
 			} else if err != nil {
+				debug("getgrgid_r", err)
 				return C.NSS_STATUS_UNAVAIL
 			}
 			if result != nil {
@@ -661,6 +665,7 @@ func _nss_awsiam_go_getspnam_r(name *C.char, spbuf *C.struct_spwd, buf *C.char, 
 	if err == insufficientBuffer {
 		return C.NSS_STATUS_TRYAGAIN
 	} else if err != nil {
+		debug("getspnam_r", err)
 		return C.NSS_STATUS_UNAVAIL
 	}
 	if spbufp != nil {
