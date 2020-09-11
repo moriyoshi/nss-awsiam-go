@@ -469,6 +469,80 @@ func fillGrentWithIamGroup(
 	return nil
 }
 
+func fillGrentWithIamUser(
+	gr *C.struct_group,
+	b bufalloc,
+	user *iam.User,
+) error {
+	// gr_name
+	{
+		p, ok := b.alloc(uintptr(len(*user.UserName) + 1))
+		if !ok {
+			return insufficientBuffer
+		}
+		C.gostrcpy(p, *user.UserName)
+		gr.gr_name = p
+	}
+	// gr_passwd
+	{
+		p, ok := b.alloc(1)
+		if !ok {
+			return insufficientBuffer
+		}
+		*p = 0
+		gr.gr_passwd = p
+	}
+	gr.gr_gid = C.gid_t(uidBase + toUid(*user.UserId))
+	// gr_mem
+	{
+		pp, ok := b.allocPtrArray(uintptr(1))
+		if !ok {
+			return insufficientBuffer
+		}
+		pp[0] = nil
+		gr.gr_mem = &pp[0]
+	}
+	return nil
+}
+
+func gwnamPseudo(
+	name string,
+	iamw *iamWrap,
+	grp *C.struct_group,
+	buf *C.char,
+	buflen C.size_t,
+	result **C.struct_group,
+) C.enum_nss_status {
+	user, err := iamw.getIamUser(name)
+	if err != nil {
+		if err, ok := err.(awserr.RequestFailure); ok {
+			if err.StatusCode() == 404 {
+				return C.NSS_STATUS_NOTFOUND
+			}
+		}
+		debug("getgrnam_r", err)
+		return C.NSS_STATUS_UNAVAIL
+	}
+	err = fillGrentWithIamUser(
+		grp,
+		bufalloc{
+			buf:    uintptr(unsafe.Pointer(buf)),
+			buflen: uintptr(buflen),
+		},
+		user,
+	)
+	if err == insufficientBuffer {
+		return C.NSS_STATUS_TRYAGAIN
+	} else if err != nil {
+		debug("getgrnam_r", err)
+		return C.NSS_STATUS_UNAVAIL
+	}
+	if result != nil {
+		*result = grp
+	}
+	return C.NSS_STATUS_SUCCESS
+}
+
 //export _nss_awsiam_go_getgrnam_r
 func _nss_awsiam_go_getgrnam_r(
 	name *C.char,
@@ -484,7 +558,7 @@ func _nss_awsiam_go_getgrnam_r(
 		debug("getgrnam_r", err)
 		if err, ok := err.(awserr.RequestFailure); ok {
 			if err.StatusCode() == 404 {
-				return C.NSS_STATUS_NOTFOUND
+				return gwnamPseudo(goName, iamw, grp, buf, buflen, result)
 			}
 		}
 		return C.NSS_STATUS_UNAVAIL
@@ -524,7 +598,7 @@ func _nss_awsiam_go_getgrgid_r(
 		debug("getgrgid_r", err)
 		if err, ok := err.(awserr.RequestFailure); ok {
 			if err.StatusCode() == 404 {
-				return C.NSS_STATUS_NOTFOUND
+				goto scanPseudoGroups
 			}
 		}
 		return C.NSS_STATUS_UNAVAIL
@@ -562,13 +636,48 @@ func _nss_awsiam_go_getgrgid_r(
 			return C.NSS_STATUS_SUCCESS
 		}
 	}
+
+scanPseudoGroups:
+	users, err := iamw.getIamUsers()
+	if err != nil {
+		debug("getgrgid_r", err)
+		if err, ok := err.(awserr.RequestFailure); ok {
+			if err.StatusCode() == 404 {
+				return C.NSS_STATUS_NOTFOUND
+			}
+		}
+		return C.NSS_STATUS_UNAVAIL
+	}
+	for _, user := range users {
+		if gid == C.gid_t(uidBase+toUid(*user.UserId)) {
+			err = fillGrentWithIamUser(
+				grp,
+				bufalloc{
+					buf:    uintptr(unsafe.Pointer(buf)),
+					buflen: uintptr(buflen),
+				},
+				&user,
+			)
+			if err == insufficientBuffer {
+				return C.NSS_STATUS_TRYAGAIN
+			} else if err != nil {
+				debug("getgwgid_r", err)
+				return C.NSS_STATUS_UNAVAIL
+			}
+			if result != nil {
+				*result = grp
+			}
+			return C.NSS_STATUS_SUCCESS
+		}
+	}
 	return C.NSS_STATUS_NOTFOUND
 }
 
 var getgrentContext struct {
 	iamw   *iamWrap
 	groups []iam.Group
-	i      int
+	users  []iam.User
+	i, j   int
 }
 
 //export _nss_awsiam_go_setgrent
@@ -590,31 +699,51 @@ func _nss_awsiam_go_getgrent_r(grbuf *C.struct_group, buf *C.char, buflen C.size
 			debug("getgrent_r", err)
 			return C.NSS_STATUS_UNAVAIL
 		}
+		users, err := iamw.getIamUsers()
+		if err != nil {
+			debug("getgrent_r", err)
+			return C.NSS_STATUS_UNAVAIL
+		}
 		getgrentContext.iamw = iamw
 		getgrentContext.groups = groups
+		getgrentContext.users = users
 		getgrentContext.i = 0
+		getgrentContext.j = 0
 	}
-	if getgrentContext.i >= len(getgrentContext.groups) {
-		getgrentContext.iamw = nil
-		return C.NSS_STATUS_NOTFOUND
+	if getgrentContext.i < len(getgrentContext.groups) {
+		group := &getgrentContext.groups[getgrentContext.i]
+		usersInGroup, err := getgrentContext.iamw.getIamUsersInGroup(*group.GroupName)
+		if err != nil {
+			debug("getgrent_r", err)
+			return C.NSS_STATUS_UNAVAIL
+		}
+		fillGrentWithIamGroup(
+			grbuf,
+			bufalloc{
+				buf:    uintptr(unsafe.Pointer(buf)),
+				buflen: uintptr(buflen),
+			},
+			group,
+			usersInGroup,
+		)
+		getgrentContext.i += 1
+		return C.NSS_STATUS_SUCCESS
 	}
-	group := &getgrentContext.groups[getgrentContext.i]
-	usersInGroup, err := getgrentContext.iamw.getIamUsersInGroup(*group.GroupName)
-	if err != nil {
-		debug("getgrent_r", err)
-		return C.NSS_STATUS_UNAVAIL
+	if getgrentContext.j < len(getgrentContext.users) {
+		user := &getgrentContext.users[getgrentContext.j]
+		fillGrentWithIamUser(
+			grbuf,
+			bufalloc{
+				buf:    uintptr(unsafe.Pointer(buf)),
+				buflen: uintptr(buflen),
+			},
+			user,
+		)
+		getgrentContext.j += 1
+		return C.NSS_STATUS_SUCCESS
 	}
-	fillGrentWithIamGroup(
-		grbuf,
-		bufalloc{
-			buf:    uintptr(unsafe.Pointer(buf)),
-			buflen: uintptr(buflen),
-		},
-		group,
-		usersInGroup,
-	)
-	getgrentContext.i += 1
-	return C.NSS_STATUS_SUCCESS
+	getgrentContext.iamw = nil
+	return C.NSS_STATUS_NOTFOUND
 }
 
 func fillSpentWithIamUser(
