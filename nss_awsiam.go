@@ -66,13 +66,16 @@ const tagGid = "UnixGid"
 const tagHomeDir = "UnixHomeDirectory"
 const tagShell = "UnixShell"
 
-var debugEnabled bool
+var debugLevel int
 var timeout time.Duration
 var rootCtx = context.Background()
 
 func init() {
 	var err error
-	debugEnabled = os.Getenv("NSS_AWSIAM_GO_DEBUG") != ""
+	debugLevel, err = strconv.Atoi(os.Getenv("NSS_AWSIAM_GO_DEBUG"))
+	if err != nil {
+		debugLevel = 0
+	}
 	timeout, err = time.ParseDuration(os.Getenv("NSS_AWSIAM_GO_TIMEOUT"))
 	if err != nil {
 		timeout = time.Second * 3
@@ -80,7 +83,7 @@ func init() {
 }
 
 func debug(msg ...interface{}) {
-	if debugEnabled {
+	if debugLevel > 0 {
 		fmt.Fprintln(os.Stderr, msg...)
 	}
 }
@@ -97,12 +100,18 @@ func getAwsConfig() (cfg aws.Config, err error) {
 		if err != nil {
 			return
 		}
+		if debugLevel > 1 {
+			cfg.LogLevel = aws.LogDebug
+		}
 		sts := sts.New(cfg)
 		cfg.Credentials = stscreds.NewAssumeRoleProvider(sts, stsAssumeRoleArn)
 	} else {
 		cfg, err = external.LoadDefaultAWSConfig()
 		if err != nil {
 			return
+		}
+		if debugLevel > 1 {
+			cfg.LogLevel = aws.LogDebug
 		}
 	}
 	return
