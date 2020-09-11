@@ -24,6 +24,7 @@ package main
 // #include <string.h>
 // #include <pwd.h>
 // #include <grp.h>
+// #include <shadow.h>
 // #include <nss.h>
 //
 // size_t _GoStringLen(_GoString_ s);
@@ -501,6 +502,71 @@ func _nss_awsiam_go_getgrent_r(grbuf *C.struct_group, buf *C.char, buflen C.size
 		usersInGroup,
 	)
 	getgrentContext.i += 1
+	return C.NSS_STATUS_SUCCESS
+}
+
+func fillSpentWithIamUser(
+	spwd *C.struct_spwd,
+	b bufalloc,
+	user *iam.User,
+) error {
+	// pw_name
+	{
+		p, ok := b.alloc(uintptr(len(*user.UserName) + 1))
+		if !ok {
+			return insufficientBuffer
+		}
+		C.gostrcpy(p, *user.UserName)
+		spwd.sp_namp = p
+	}
+	// pw_passwd
+	{
+		p, ok := b.alloc(1)
+		if !ok {
+			return insufficientBuffer
+		}
+		*p = 0
+		spwd.sp_pwdp = p
+	}
+	spwd.sp_lstchg = 0
+	spwd.sp_min = 0
+	spwd.sp_max = 0
+	spwd.sp_warn = 0
+	spwd.sp_inact = 0
+	spwd.sp_expire = 0
+	return nil
+}
+
+//export _nss_awsiam_go_getspnam_r
+func _nss_awsiam_go_getspnam_r(name *C.char, spbuf *C.struct_spwd, buf *C.char, buflen C.size_t, spbufp **C.struct_spwd) C.enum_nss_status {
+	iamw := newIamWrap(rootCtx)
+	goName := C.GoString(name)
+	user, err := iamw.getIamUser(goName)
+	if err != nil {
+		if err, ok := err.(awserr.RequestFailure); ok {
+			if err.StatusCode() == 404 {
+				return C.NSS_STATUS_NOTFOUND
+			}
+		}
+		debug("getpwnam_r", err)
+		return C.NSS_STATUS_UNAVAIL
+	}
+	err = fillSpentWithIamUser(
+		spbuf,
+		bufalloc{
+			buf:    uintptr(unsafe.Pointer(buf)),
+			buflen: uintptr(buflen),
+		},
+		user,
+	)
+	if err == insufficientBuffer {
+		return C.NSS_STATUS_TRYAGAIN
+	} else if err != nil {
+		return C.NSS_STATUS_UNAVAIL
+	}
+	if spbufp != nil {
+		*spbufp = spbuf
+	}
 	return C.NSS_STATUS_SUCCESS
 }
 
