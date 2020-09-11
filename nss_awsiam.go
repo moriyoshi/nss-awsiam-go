@@ -55,6 +55,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/iam/iamiface"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
+	"github.com/joho/godotenv"
 )
 
 const ttl = 120 * time.Second
@@ -65,18 +66,42 @@ const tagUid = "UnixUid"
 const tagGid = "UnixGid"
 const tagHomeDir = "UnixHomeDirectory"
 const tagShell = "UnixShell"
+const configFile = "/etc/nss_awsiam_go.conf"
 
 var debugLevel int
 var timeout time.Duration
 var rootCtx = context.Background()
+var envMap map[string]string
+
+func getenv(name string) string {
+	if envMap != nil {
+		v, ok := envMap[name]
+		if ok {
+			return v
+		}
+	}
+	return os.Getenv(name)
+}
+
+func getenvOfAny(names ...string) string {
+	for _, name := range names {
+		v := getenv(name)
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
 
 func init() {
 	var err error
-	debugLevel, err = strconv.Atoi(os.Getenv("NSS_AWSIAM_GO_DEBUG"))
+	envMap, _ = godotenv.Read(configFile)
+
+	debugLevel, err = strconv.Atoi(getenv("NSS_AWSIAM_GO_DEBUG"))
 	if err != nil {
 		debugLevel = 0
 	}
-	timeout, err = time.ParseDuration(os.Getenv("NSS_AWSIAM_GO_TIMEOUT"))
+	timeout, err = time.ParseDuration(getenv("NSS_AWSIAM_GO_TIMEOUT"))
 	if err != nil {
 		timeout = time.Second * 3
 	}
@@ -88,15 +113,74 @@ func debug(msg ...interface{}) {
 	}
 }
 
+func boolVal(v string) (*bool, error) {
+	v = strings.ToLower(v)
+	if v == "false" {
+		return aws.Bool(false), nil
+	} else if v == "true" {
+		return aws.Bool(true), nil
+	} else {
+		return nil, fmt.Errorf("\"true\" or \"false\" wanted, got %s", v)
+	}
+}
+
+func envConfig(_ external.Configs) (external.Config, error) {
+	var cfg external.EnvConfig
+	var err error
+
+	creds := aws.Credentials{
+		Source: external.CredentialsSourceName,
+	}
+	creds.AccessKeyID = getenvOfAny("AWS_ACCESS_KEY_ID", "AWS_ACCESS_KEY")
+	creds.SecretAccessKey = getenvOfAny("AWS_SECRET_ACCESS_KEY", "AWS_SECRET_KEY")
+	if creds.HasKeys() {
+		creds.SessionToken = getenvOfAny("AWS_SESSION_TOKEN")
+		cfg.Credentials = creds
+	}
+
+	cfg.ContainerCredentialsEndpoint = getenv("AWS_CONTAINER_CREDENTIALS_FULL_URI")
+	cfg.ContainerCredentialsRelativePath = getenv("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI")
+	cfg.ContainerAuthorizationToken = getenv("AWS_CONTAINER_AUTHORIZATION_TOKEN")
+
+	cfg.Region = getenvOfAny("AWS_REGION", "AWS_DEFAULT_REGION")
+	cfg.SharedConfigProfile = getenvOfAny("AWS_PROFILE", "AWS_DEFAULT_PROFILE")
+
+	cfg.SharedCredentialsFile = getenv("AWS_SHARED_CREDENTIALS_FILE")
+	cfg.SharedConfigFile = getenv("AWS_CONFIG_FILE")
+
+	cfg.CustomCABundle = getenv("AWS_CA_BUNDLE")
+
+	cfg.WebIdentityTokenFilePath = getenv("AWS_WEB_IDENTITY_TOKEN_FILE")
+
+	cfg.RoleARN = getenv("AWS_ROLE_ARN")
+	cfg.RoleSessionName = getenv("AWS_ROLE_SESSION_NAME")
+
+	if v := getenv("AWS_ENABLE_ENDPOINT_DISCOVERY"); v != "" {
+		cfg.EnableEndpointDiscovery, err = boolVal(v)
+		if err != nil {
+			return cfg, err
+		}
+	}
+	if v := getenv("AWS_S3_USE_ARN_REGION"); v != "" {
+		cfg.S3UseARNRegion, err = boolVal(v)
+		if err != nil {
+			return cfg, err
+		}
+	}
+	return cfg, nil
+}
+
 func getAwsConfig() (cfg aws.Config, err error) {
-	stsAssumeRoleArn := os.Getenv("AWS_STS_ASSUME_ROLE_ARN")
+	var ourConfigs external.Configs
+	ourConfigs, _ = ourConfigs.AppendFromLoaders([]external.ConfigLoader{envConfig})
+	stsAssumeRoleArn := getenv("AWS_STS_ASSUME_ROLE_ARN")
 	if stsAssumeRoleArn != "" {
 		var extraConfigs []external.Config
-		stsSourceProfile := os.Getenv("AWS_STS_SOURCE_PROFILE")
+		stsSourceProfile := getenv("AWS_STS_SOURCE_PROFILE")
 		if stsSourceProfile != "" {
 			extraConfigs = []external.Config{external.WithSharedConfigProfile(stsSourceProfile)}
 		}
-		cfg, err = external.LoadDefaultAWSConfig(extraConfigs...)
+		cfg, err = external.LoadDefaultAWSConfig(append(ourConfigs, extraConfigs...)...)
 		if err != nil {
 			return
 		}
@@ -106,7 +190,7 @@ func getAwsConfig() (cfg aws.Config, err error) {
 		sts := sts.New(cfg)
 		cfg.Credentials = stscreds.NewAssumeRoleProvider(sts, stsAssumeRoleArn)
 	} else {
-		cfg, err = external.LoadDefaultAWSConfig()
+		cfg, err = external.LoadDefaultAWSConfig(ourConfigs...)
 		if err != nil {
 			return
 		}
