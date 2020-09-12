@@ -105,13 +105,13 @@ func debug(msg ...interface{}) {
 func populateConfigFromEnvVars() {
 	{
 		v, err := strconv.Atoi(getenv("NSS_AWSIAM_GO_DEBUG"))
-		if err != nil {
+		if err == nil {
 			debugLevel = v
 		}
 	}
 	{
 		v, err := time.ParseDuration(getenv("NSS_AWSIAM_GO_TIMEOUT"))
-		if err != nil {
+		if err == nil {
 			timeout = v
 		}
 	}
