@@ -58,16 +58,16 @@ import (
 
 const ttl = 120 * time.Second
 const uidBase = 131072
-const homeDirTemplate = "/home/%s"
-const defaultShell = "/bin/sh"
 const tagUid = "UnixUid"
 const tagGid = "UnixGid"
 const tagHomeDir = "UnixHomeDirectory"
 const tagShell = "UnixShell"
 const configFile = "/etc/nss_awsiam_go.conf"
 
-var debugLevel int
-var timeout time.Duration
+var debugLevel int = 0
+var timeout time.Duration = 3 * time.Second
+var homeDirTemplate = "/home/%s"
+var defaultShell = "/bin/sh"
 var rootCtx = context.Background()
 var envMap map[string]string
 
@@ -92,22 +92,40 @@ func getenvOfAny(names ...string) string {
 }
 
 func init() {
-	var err error
 	envMap, _ = godotenv.Read(configFile)
-
-	debugLevel, err = strconv.Atoi(getenv("NSS_AWSIAM_GO_DEBUG"))
-	if err != nil {
-		debugLevel = 0
-	}
-	timeout, err = time.ParseDuration(getenv("NSS_AWSIAM_GO_TIMEOUT"))
-	if err != nil {
-		timeout = time.Second * 3
-	}
+	populateConfigFromEnvVars()
 }
 
 func debug(msg ...interface{}) {
 	if debugLevel > 0 {
 		fmt.Fprintln(os.Stderr, msg...)
+	}
+}
+
+func populateConfigFromEnvVars() {
+	{
+		v, err := strconv.Atoi(getenv("NSS_AWSIAM_GO_DEBUG"))
+		if err != nil {
+			debugLevel = v
+		}
+	}
+	{
+		v, err := time.ParseDuration(getenv("NSS_AWSIAM_GO_TIMEOUT"))
+		if err != nil {
+			timeout = v
+		}
+	}
+	{
+		v := getenv("NSS_AWSIAM_HOMEDIR_TEMPLATE")
+		if v != "" {
+			homeDirTemplate = v
+		}
+	}
+	{
+		v := getenv("NSS_AWSIAM_DEFAULT_SHELL")
+		if v != "" {
+			defaultShell = v
+		}
 	}
 }
 
