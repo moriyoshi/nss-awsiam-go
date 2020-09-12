@@ -18,6 +18,14 @@ For security reasons, this module doesn't accept shared configuration and creden
 
 ## Environment variables
 
+### Authorization
+
+In addition to the default AWS SDK configuration scheme, it supports STS credentials for a assumed role through the following environment variables:
+
+* `AWS_STS_ASSUME_ROLE_ARN`
+
+  This specifies the ARN for the assumed (target) IAM role. The difference from `AWS_ROLE_ARN` is that this can be used in nested STS contexts.
+
 ### Querying
 
 You can configure the querying behavior by the following special environment variable:
