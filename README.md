@@ -14,19 +14,9 @@ will produce `libnss_awsiam_go.so` in the current working directory.  You can pu
 
 Configuration is done through the env file (`/etc/nss_awsiam_go.conf`) or environment variables.
 
+For security reasons, this module doesn't accept shared configuration and credentials under `~/.aws`.
+
 ## Environment variables
-
-### Authorization
-
-In addition to the default AWS SDK configuration scheme, it supports STS credentials for a assumed role through the following environment variables:
-
-* `AWS_STS_SOURCE_PROFILE`
-
-    This specifies the AWS profile in ~/.aws/config used for retrieving temporary credentials.
-
-* `AWS_STS_ASSUME_ROLE_ARN`
-
-    This specifies the ARN for the assumed (target) IAM role.
 
 ### Querying
 

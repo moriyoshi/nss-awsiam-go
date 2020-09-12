@@ -51,10 +51,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/awserr"
 	"github.com/aws/aws-sdk-go-v2/aws/external"
-	"github.com/aws/aws-sdk-go-v2/aws/stscreds"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/iam/iamiface"
-	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/joho/godotenv"
 )
 
@@ -173,30 +171,12 @@ func envConfig(_ external.Configs) (external.Config, error) {
 func getAwsConfig() (cfg aws.Config, err error) {
 	var ourConfigs external.Configs
 	ourConfigs, _ = ourConfigs.AppendFromLoaders([]external.ConfigLoader{envConfig})
-	stsAssumeRoleArn := getenv("AWS_STS_ASSUME_ROLE_ARN")
-	if stsAssumeRoleArn != "" {
-		var extraConfigs []external.Config
-		stsSourceProfile := getenv("AWS_STS_SOURCE_PROFILE")
-		if stsSourceProfile != "" {
-			extraConfigs = []external.Config{external.WithSharedConfigProfile(stsSourceProfile)}
-		}
-		cfg, err = external.LoadDefaultAWSConfig(append(ourConfigs, extraConfigs...)...)
-		if err != nil {
-			return
-		}
-		if debugLevel > 1 {
-			cfg.LogLevel = aws.LogDebug
-		}
-		sts := sts.New(cfg)
-		cfg.Credentials = stscreds.NewAssumeRoleProvider(sts, stsAssumeRoleArn)
-	} else {
-		cfg, err = external.LoadDefaultAWSConfig(ourConfigs...)
-		if err != nil {
-			return
-		}
-		if debugLevel > 1 {
-			cfg.LogLevel = aws.LogDebug
-		}
+	cfg, err = ourConfigs.ResolveAWSConfig(external.DefaultAWSConfigResolvers)
+	if err != nil {
+		return
+	}
+	if debugLevel > 1 {
+		cfg.LogLevel = aws.LogDebug
 	}
 	return
 }
