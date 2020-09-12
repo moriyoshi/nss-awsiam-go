@@ -116,13 +116,13 @@ func populateConfigFromEnvVars() {
 		}
 	}
 	{
-		v := getenv("NSS_AWSIAM_HOMEDIR_TEMPLATE")
+		v := getenv("NSS_AWSIAM_GO_HOMEDIR_TEMPLATE")
 		if v != "" {
 			homeDirTemplate = v
 		}
 	}
 	{
-		v := getenv("NSS_AWSIAM_DEFAULT_SHELL")
+		v := getenv("NSS_AWSIAM_GO_DEFAULT_SHELL")
 		if v != "" {
 			defaultShell = v
 		}
