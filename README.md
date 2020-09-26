@@ -12,11 +12,11 @@ will produce `libnss_awsiam_go.so` in the current working directory.  You can pu
 
 ## Configuration
 
-Configuration is done through the env file (`/etc/nss_awsiam_go.conf`) or environment variables.
+Configuration is done through the configuration variable file (`/etc/nss_awsiam_go.conf`).
 
 For security reasons, this module doesn't accept shared configuration and credentials under `~/.aws`.
 
-## Environment variables
+## Configuration variables
 
 ### Authorization
 
@@ -39,6 +39,10 @@ You can configure the querying behavior by the following special environment var
 * `NSS_AWSIAM_GO_DEBUG`
 
     Takes an integer value. 1 to enable error reporting, and 2 to enable AWS API request debugging.
+
+## Note on `SIGURG` usage in Go runtime
+
+Since Go 1.14, it started to use `SIGURG` to do the non-cooperative preemption. This may be troublesome because the hosting application will also receive the signal. This module should work without preemption. To prevent the preemption, specify `GODEBUG=asyncpreemptoff=1`.
 
 ## License
 

@@ -80,7 +80,7 @@ func getenv(name string) string {
 			return v
 		}
 	}
-	return os.Getenv(name)
+	return ""
 }
 
 func getenvOfAny(names ...string) string {
