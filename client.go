@@ -315,42 +315,6 @@ func (cli *iamClient) getGroup(ctx context.Context, groupName string) (*iam.Grou
 	return group, members, nil
 }
 
-/*
-func (cli *iamClient) getGroupMembersMap(ctx context.Context) (map[string][]*iam.User, error) {
-	cli.mu.Lock()
-	defer cli.mu.Unlock()
-	var retval map[string][]*iam.User
-	if !cli.groupMembersCache.expiry.IsZero() &&
-		cli.groupMembersCache.expiry.After(cli.nowGetter()) {
-		retval = cli.groupMembersCache.data
-	} else {
-		users, err := cli.listUsers(ctx)
-		if err != nil {
-			return nil, err
-		}
-		var expiry time.Time
-		for _, user := range users {
-			groups, err := cli.listGroupsForUser(ctx, *user.UserName)
-			if err != nil {
-				return nil, err
-			}
-			ent := cli.groupsForUserCache[*user.UserName]
-			if expiry.IsZero() || expiry.After(ent.expiry) {
-				expiry = ent.expiry
-			}
-			for _, group := range groups {
-				retval[*group.GroupName] = append(retval[*group.GroupName], &user)
-			}
-		}
-		if expiry.IsZero() || expiry.After(cli.listUsersCache.expiry) {
-			expiry = cli.listUsersCache.expiry
-		}
-		cli.groupMembersCache.expiry = expiry
-		cli.groupMembersCache.data = retval
-	}
-	return retval, nil
-}
-*/
 func (cli *iamClient) getUsersInGroup(ctx context.Context, groupName string) ([]*iam.User, error) {
 	_, members, err := cli.getGroup(ctx, groupName)
 	if err != nil {
