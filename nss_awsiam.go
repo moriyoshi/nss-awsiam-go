@@ -23,10 +23,12 @@ package main
 
 // #include <sys/types.h>
 // #include <string.h>
+// #include <stdlib.h>
 // #include <pwd.h>
 // #include <grp.h>
 // #include <shadow.h>
 // #include <nss.h>
+// #include <errno.h>
 //
 // size_t _GoStringLen(_GoString_ s);
 // const char *_GoStringPtr(_GoString_ s);
@@ -941,6 +943,123 @@ func _nss_awsiam_go_getspnam_r(name *C.char, spbuf *C.struct_spwd, buf *C.char, 
 	}
 	if spbufp != nil {
 		*spbufp = spbuf
+	}
+	return C.NSS_STATUS_SUCCESS
+}
+
+type initgroupsBuf struct {
+	i     uintptr
+	size  uintptr
+	limit uintptr
+	buf   *C.gid_t
+}
+
+func (a *initgroupsBuf) add(item C.gid_t) (bool, bool) {
+	if a.i >= a.size {
+		if a.limit != 0 && a.size >= a.limit {
+			return true, false
+		} else {
+			newSize := 2 * a.size
+			if newSize/a.size < 2 {
+				// overflow
+				return false, true
+			}
+			if a.limit != 0 && newSize > a.limit {
+				newSize = a.limit
+			}
+			newSizeInBytes := newSize * unsafe.Sizeof(C.gid_t(0))
+			if newSizeInBytes/newSize < unsafe.Sizeof(C.gid_t(0)) {
+				// overflow
+				return false, true
+			}
+			newBuf := C.realloc(unsafe.Pointer(a.buf), C.size_t(newSizeInBytes))
+			if newBuf == nil {
+				return false, true
+			}
+			a.buf = (*C.gid_t)(newBuf)
+			a.size = newSize
+		}
+	}
+	p := (*[math.MaxInt32]C.gid_t)(unsafe.Pointer(a.buf))
+	p[a.i] = item
+	a.i += 1
+	return false, false
+}
+
+//export _nss_awsiam_go_initgroups_dyn
+func _nss_awsiam_go_initgroups_dyn(name *C.char, exclude C.gid_t, start *C.long, size *C.long, groupsp **C.gid_t, limit C.long, errnop *C.int) C.enum_nss_status {
+	if *start < 0 {
+		debug("initgroups_dyn: *start < 0")
+		return C.NSS_STATUS_UNAVAIL
+	}
+	if *size < 0 {
+		debug("initgroups_dyn: *size < 0")
+		return C.NSS_STATUS_UNAVAIL
+	}
+	if *start >= *size {
+		debug("initgroups_dyn: *start >= *size")
+		return C.NSS_STATUS_UNAVAIL
+	}
+	if groupsp == nil {
+		debug("initgroups_dyn: groupsp == nil")
+		return C.NSS_STATUS_UNAVAIL
+	}
+	iamw := newIamWrap(rootCtx)
+	goName := C.GoString(name)
+	groups, err := iamw.getIamGroups()
+	if err != nil {
+		debug("initgroups_dyn", err)
+		return C.NSS_STATUS_UNAVAIL
+	}
+	if limit < 0 {
+		limit = 0
+	}
+	b := initgroupsBuf{
+		i:     uintptr(*start), // validated; safe
+		size:  uintptr(*size),  // validated; safe
+		limit: uintptr(limit),  // negative value coerced; safe
+		buf:   *groupsp,
+	}
+
+outer:
+	for _, g := range groups {
+		gid := C.gid_t(uidBase + toUid(*g.GroupId))
+		if gid == exclude {
+			continue
+		}
+		users, err := iamw.getIamUsersInGroup(*g.GroupName)
+		if err != nil {
+			debug("initgroups_dyn", err)
+			return C.NSS_STATUS_UNAVAIL
+		}
+		for _, u := range users {
+			if *u.UserName == goName {
+				limitReached, badAlloc := b.add(gid)
+				if limitReached {
+					break outer
+				} else if badAlloc {
+					err = insufficientBuffer
+					break outer
+				}
+			}
+		}
+	}
+	// sync back
+	*groupsp = b.buf // this must always be sync
+	if b.i > uintptr(1<<(8*unsafe.Sizeof(C.long(0))-1)-1) {
+		return C.NSS_STATUS_UNAVAIL
+	}
+	*start = C.long(b.i)
+	if b.size > uintptr(1<<(8*unsafe.Sizeof(C.long(0))-1)-1) {
+		return C.NSS_STATUS_UNAVAIL
+	}
+	*size = C.long(b.size)
+
+	if err == insufficientBuffer {
+		return C.NSS_STATUS_TRYAGAIN
+	} else if err != nil {
+		debug("initgroups_dyn", err)
+		return C.NSS_STATUS_UNAVAIL
 	}
 	return C.NSS_STATUS_SUCCESS
 }
