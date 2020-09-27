@@ -40,6 +40,16 @@ You can configure the querying behavior by the following special environment var
 
     Takes an integer value. 1 to enable error reporting, and 2 to enable AWS API request debugging.
 
+### Miscellaneous
+
+* `NSS_AWSIAM_GO_DEFAULT_SHELL`
+
+    Specify the default shell for all users.
+
+* `NSS_AWSIAM_GO_HOMEDIR_TEMPLATE`
+
+    Specify the home directory template applied for all users.  You can use the placeholder `{userName}`, `{userId}`, or `{uid}` everywhere in the template.
+
 ## Note on `SIGURG` usage in Go runtime
 
 Since Go 1.14, it started to use `SIGURG` to do the non-cooperative preemption. This may be troublesome because the hosting application will also receive the signal. This module should work without preemption. To prevent the preemption, specify `GODEBUG=asyncpreemptoff=1`.

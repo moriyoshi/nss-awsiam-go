@@ -71,7 +71,7 @@ const envNamePrefixEndpointOverride = "AWS_ENDPOINT_OVERRIDES_"
 
 var debugLevel int = 0
 var timeout time.Duration = 3 * time.Second
-var homeDirTemplate = "/home/%s"
+var homeDirTemplate = "/home/{userName}"
 var defaultShell = "/bin/sh"
 var rootCtx = context.Background()
 var envMap map[string]string
@@ -384,7 +384,16 @@ func fillPwentWithIamUser(
 	pwd.pw_uid = C.uid_t(uid)
 	pwd.pw_gid = C.gid_t(gid)
 	if homeDir == "" {
-		homeDir = fmt.Sprintf(homeDirTemplate, *user.UserName)
+		var err error
+		vars := map[string]string{
+			"userName": *user.UserName,
+			"userId":   *user.UserId,
+			"uid":      strconv.Itoa(uid),
+		}
+		homeDir, err = replacePlaceholders(homeDirTemplate, vars)
+		if err != nil {
+			return err
+		}
 	}
 	if shell == "" {
 		shell = defaultShell
