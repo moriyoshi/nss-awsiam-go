@@ -1,0 +1,16 @@
+users:
+  - name: foo
+  - name: bar
+
+groups:
+  - name: foogroup
+    members:
+      - foo
+  - name: bargroup
+    members:
+      - bar
+  - name: foobargroup
+    members:
+      - foo
+      - bar
+  - name: empty

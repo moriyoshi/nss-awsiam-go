@@ -1,2 +1,3 @@
 *.so
 libnss_awsiam_go.h
+iam-emulator-bin

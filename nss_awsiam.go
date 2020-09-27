@@ -1,4 +1,5 @@
 // +build cgo
+
 // Copyright (c) 2020 Moriyoshi Koizumi
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -50,6 +51,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/awserr"
+	"github.com/aws/aws-sdk-go-v2/aws/endpoints"
 	"github.com/aws/aws-sdk-go-v2/aws/external"
 	"github.com/aws/aws-sdk-go-v2/aws/stscreds"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
@@ -65,6 +67,7 @@ const tagGid = "UnixGid"
 const tagHomeDir = "UnixHomeDirectory"
 const tagShell = "UnixShell"
 const configFile = "/etc/nss_awsiam_go.conf"
+const envNamePrefixEndpointOverride = "AWS_ENDPOINT_OVERRIDES_"
 
 var debugLevel int = 0
 var timeout time.Duration = 3 * time.Second
@@ -211,6 +214,30 @@ func getAwsConfig() (cfg aws.Config, err error) {
 			cfg.LogLevel = aws.LogDebug
 		}
 	}
+
+	resolver := endpoints.NewDefaultResolver()
+
+	vars := map[string]string{
+		"region": cfg.Region,
+	}
+
+	cfg.EndpointResolver = aws.EndpointResolverFunc(
+		func(service, region string) (aws.Endpoint, error) {
+			endpointTemplate := getenv(envNamePrefixEndpointOverride + strings.ToUpper(service))
+			if endpointTemplate != "" {
+				url, err := replacePlaceholders(endpointTemplate, vars)
+				if err != nil {
+					return aws.Endpoint{}, err
+				}
+				return aws.Endpoint{
+					URL: url,
+				}, nil
+			} else {
+				return resolver.ResolveEndpoint(service, region)
+			}
+		},
+	)
+
 	return
 }
 
@@ -910,5 +937,4 @@ func _nss_awsiam_go_getspnam_r(name *C.char, spbuf *C.struct_spwd, buf *C.char, 
 }
 
 func main() {
-	fmt.Println("START")
 }
