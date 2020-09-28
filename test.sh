@@ -18,7 +18,7 @@ if ! grep -q 'initgroups' "${nsswitch_conf}"; then
 fi
 cat "${nsswitch_conf}"
 
-./iam-emulator-bin -bind '127.0.0.1:9000' testfixture.yml &
+"${GOPATH}/bin/aws-iam-emulator" -bind '127.0.0.1:9000' testfixture.yml &
 emulator_pid=$!
 
 getent passwd --service=awsiam_go

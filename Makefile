@@ -6,10 +6,12 @@ clean:
 libnss_awsiam_go.so: nss_awsiam.go client.go utils.go
 	go build -o "$@" -buildmode=c-shared $^
 
-iam-emulator-bin: iam-emulator/*.go
-	go build -o "$@" ./iam-emulator
+aws-iam-emulator: ${GOPATH}/bin/aws-iam-emulator
+
+${GOPATH}/bin/aws-iam-emulator:
+	go get github.com/moriyoshi/aws-iam-emulator
 
 test:
-	docker run --rm -v "${PWD}:/go/src/stage:rw" -it "golang:1.15-buster" sh -c 'cd /go/src/stage && ls -l && make iam-emulator-bin libnss_awsiam_go.so && ./test.sh'
+	docker run --rm -v "${PWD}:/go/src/stage:rw" -it "golang:1.15-buster" sh -c 'cd /go/src/stage && ls -l && make aws-iam-emulator libnss_awsiam_go.so && ./test.sh'
 
-.PHONY: all clean test
+.PHONY: all clean aws-iam-emulator test
