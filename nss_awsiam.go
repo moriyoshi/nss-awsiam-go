@@ -78,7 +78,7 @@ var defaultShell = "/bin/sh"
 var rootCtx = context.Background()
 var envMap map[string]string
 
-func getenv(name string) string {
+func getEnv(name string) string {
 	if envMap != nil {
 		v, ok := envMap[name]
 		if ok {
@@ -88,9 +88,9 @@ func getenv(name string) string {
 	return ""
 }
 
-func getenvOfAny(names ...string) string {
+func getEnvOfAny(names ...string) string {
 	for _, name := range names {
-		v := getenv(name)
+		v := getEnv(name)
 		if v != "" {
 			return v
 		}
@@ -111,25 +111,25 @@ func debug(msg ...interface{}) {
 
 func populateConfigFromEnvVars() {
 	{
-		v, err := strconv.Atoi(getenv("NSS_AWSIAM_GO_DEBUG"))
+		v, err := strconv.Atoi(getEnv("NSS_AWSIAM_GO_DEBUG"))
 		if err == nil {
 			debugLevel = v
 		}
 	}
 	{
-		v, err := time.ParseDuration(getenv("NSS_AWSIAM_GO_TIMEOUT"))
+		v, err := time.ParseDuration(getEnv("NSS_AWSIAM_GO_TIMEOUT"))
 		if err == nil {
 			timeout = v
 		}
 	}
 	{
-		v := getenv("NSS_AWSIAM_GO_HOMEDIR_TEMPLATE")
+		v := getEnv("NSS_AWSIAM_GO_HOMEDIR_TEMPLATE")
 		if v != "" {
 			homeDirTemplate = v
 		}
 	}
 	{
-		v := getenv("NSS_AWSIAM_GO_DEFAULT_SHELL")
+		v := getEnv("NSS_AWSIAM_GO_DEFAULT_SHELL")
 		if v != "" {
 			defaultShell = v
 		}
@@ -154,37 +154,37 @@ func envConfig(_ external.Configs) (external.Config, error) {
 	creds := aws.Credentials{
 		Source: external.CredentialsSourceName,
 	}
-	creds.AccessKeyID = getenvOfAny("AWS_ACCESS_KEY_ID", "AWS_ACCESS_KEY")
-	creds.SecretAccessKey = getenvOfAny("AWS_SECRET_ACCESS_KEY", "AWS_SECRET_KEY")
+	creds.AccessKeyID = getEnvOfAny("AWS_ACCESS_KEY_ID", "AWS_ACCESS_KEY")
+	creds.SecretAccessKey = getEnvOfAny("AWS_SECRET_ACCESS_KEY", "AWS_SECRET_KEY")
 	if creds.HasKeys() {
-		creds.SessionToken = getenvOfAny("AWS_SESSION_TOKEN")
+		creds.SessionToken = getEnvOfAny("AWS_SESSION_TOKEN")
 		cfg.Credentials = creds
 	}
 
-	cfg.ContainerCredentialsEndpoint = getenv("AWS_CONTAINER_CREDENTIALS_FULL_URI")
-	cfg.ContainerCredentialsRelativePath = getenv("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI")
-	cfg.ContainerAuthorizationToken = getenv("AWS_CONTAINER_AUTHORIZATION_TOKEN")
+	cfg.ContainerCredentialsEndpoint = getEnv("AWS_CONTAINER_CREDENTIALS_FULL_URI")
+	cfg.ContainerCredentialsRelativePath = getEnv("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI")
+	cfg.ContainerAuthorizationToken = getEnv("AWS_CONTAINER_AUTHORIZATION_TOKEN")
 
-	cfg.Region = getenvOfAny("AWS_REGION", "AWS_DEFAULT_REGION")
-	cfg.SharedConfigProfile = getenvOfAny("AWS_PROFILE", "AWS_DEFAULT_PROFILE")
+	cfg.Region = getEnvOfAny("AWS_REGION", "AWS_DEFAULT_REGION")
+	cfg.SharedConfigProfile = getEnvOfAny("AWS_PROFILE", "AWS_DEFAULT_PROFILE")
 
-	cfg.SharedCredentialsFile = getenv("AWS_SHARED_CREDENTIALS_FILE")
-	cfg.SharedConfigFile = getenv("AWS_CONFIG_FILE")
+	cfg.SharedCredentialsFile = getEnv("AWS_SHARED_CREDENTIALS_FILE")
+	cfg.SharedConfigFile = getEnv("AWS_CONFIG_FILE")
 
-	cfg.CustomCABundle = getenv("AWS_CA_BUNDLE")
+	cfg.CustomCABundle = getEnv("AWS_CA_BUNDLE")
 
-	cfg.WebIdentityTokenFilePath = getenv("AWS_WEB_IDENTITY_TOKEN_FILE")
+	cfg.WebIdentityTokenFilePath = getEnv("AWS_WEB_IDENTITY_TOKEN_FILE")
 
-	cfg.RoleARN = getenv("AWS_ROLE_ARN")
-	cfg.RoleSessionName = getenv("AWS_ROLE_SESSION_NAME")
+	cfg.RoleARN = getEnv("AWS_ROLE_ARN")
+	cfg.RoleSessionName = getEnv("AWS_ROLE_SESSION_NAME")
 
-	if v := getenv("AWS_ENABLE_ENDPOINT_DISCOVERY"); v != "" {
+	if v := getEnv("AWS_ENABLE_ENDPOINT_DISCOVERY"); v != "" {
 		cfg.EnableEndpointDiscovery, err = boolVal(v)
 		if err != nil {
 			return cfg, err
 		}
 	}
-	if v := getenv("AWS_S3_USE_ARN_REGION"); v != "" {
+	if v := getEnv("AWS_S3_USE_ARN_REGION"); v != "" {
 		cfg.S3UseARNRegion, err = boolVal(v)
 		if err != nil {
 			return cfg, err
@@ -196,7 +196,7 @@ func envConfig(_ external.Configs) (external.Config, error) {
 func getAwsConfig() (cfg aws.Config, err error) {
 	var ourConfigs external.Configs
 	ourConfigs, _ = ourConfigs.AppendFromLoaders([]external.ConfigLoader{envConfig})
-	stsAssumeRoleArn := getenv("AWS_STS_ASSUME_ROLE_ARN")
+	stsAssumeRoleArn := getEnv("AWS_STS_ASSUME_ROLE_ARN")
 	if stsAssumeRoleArn != "" {
 		cfg, err = ourConfigs.ResolveAWSConfig(external.DefaultAWSConfigResolvers)
 		if err != nil {
@@ -225,7 +225,7 @@ func getAwsConfig() (cfg aws.Config, err error) {
 
 	cfg.EndpointResolver = aws.EndpointResolverFunc(
 		func(service, region string) (aws.Endpoint, error) {
-			endpointTemplate := getenv(envNamePrefixEndpointOverride + strings.ToUpper(service))
+			endpointTemplate := getEnv(envNamePrefixEndpointOverride + strings.ToUpper(service))
 			if endpointTemplate != "" {
 				url, err := replacePlaceholders(endpointTemplate, vars)
 				if err != nil {
