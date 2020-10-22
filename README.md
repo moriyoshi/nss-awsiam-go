@@ -50,6 +50,17 @@ You can configure the querying behavior by the following special environment var
 
     Specify the home directory template applied for all users.  You can use the placeholder `{userName}`, `{userId}`, or `{uid}` everywhere in the template.
 
+## Configuration at the AWS side
+
+The following IAM permissions are necessary to grant to the IAM role with which the instance (or container) runs.
+
+* `iam:GetGroup`
+* `iam:GetGroupsForUser`
+* `iam:GetSSHPublicKey`
+* `iam:GetUser`
+* `iam:ListUser`
+* `iam:ListGroup`
+
 ## Note on `SIGURG` usage in Go runtime
 
 Since Go 1.14, it started to use `SIGURG` to do the non-cooperative preemption. This may be troublesome because the hosting application will also receive the signal. This module should work without preemption. To prevent the preemption, specify `GODEBUG=asyncpreemptoff=1`.
